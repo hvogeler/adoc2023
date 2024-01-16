@@ -10,10 +10,9 @@ pub fn main() !void {
 
     var sum: u64 = 0;
     for (lines, 1..) |line, idx| {
-        const digits = DigitPair{ .first_digit = 0, .second_digit = 0 };
-        try digits.getFirstAndLastDigit(line);
-        std.debug.print("line {d}: {d} ({d}{d}): {s}\n", .{ idx, line.len, digits.a, digits.b, line });
-        sum += ((digits.a * 10) + digits.b);
+        const digits = try DigitPair.instance(line);
+        sum += digits.getNumber();
+        std.debug.print("line {d}: {d} ({d}) ({d}): {s}\n", .{ idx, line.len, digits.getNumber(), sum, line });
     }
 
     std.debug.print("Sum of calibration values: {d} \n", .{sum});
@@ -35,15 +34,19 @@ fn readFile(allocator: std.mem.Allocator, filePath: [:0]const u8) ![]const []con
 const NoDigitError = error{DigitNotFoundError};
 
 const DigitPair = struct {
-    first_digit: ?u8 = null,
-    second_digit: ?u8 = null,
+    first_digit: u8,
+    second_digit: u8,
 
-    fn getFirstAndLastDigit(self: *DigitPair, s: []const u8) !*DigitPair {
-        self.first_digit = null;
-        self.second_digit = null;
+    pub fn getNumber(self: *@This()) u8 {
+        return (self.first_digit * 10) + self.second_digit;
+    }
+
+    pub fn getFirstAndLastDigit(self: *DigitPair, s: []const u8) !*DigitPair {
+        var first_digit: ?u8 = null;
+        var second_digit: ?u8 = null;
         loop1: for (s) |c| {
             if (c >= 0x30 and c <= 0x39) {
-                self.first_digit = c - 0x30;
+                first_digit = c - 0x30;
                 break :loop1;
             }
         }
@@ -52,27 +55,29 @@ const DigitPair = struct {
         loop2: while (i > 0) {
             const c = s[i - 1];
             if (c >= 0x30 and c <= 0x39) {
-                self.second_digit = c - 0x30;
+                second_digit = c - 0x30;
                 break :loop2;
             }
             i -= 1;
         }
 
-        if (self.first_digit == null or self.second_digit == null) {
+        if (first_digit == null or second_digit == null) {
             try std.io.getStdErr().writer().print("No Digit in: {s}\n", .{s});
             return NoDigitError.DigitNotFoundError;
         }
+        self.first_digit = first_digit.?;
+        self.second_digit = second_digit.?;
         return self;
     }
 
-    fn instance(s: []const u8) !*DigitPair {
-        var digits = DigitPair{ .first_digit = null, .second_digit = null };
+    pub fn instance(s: []const u8) !*DigitPair {
+        var digits = DigitPair{ .first_digit = 0, .second_digit = 0 };
         return try digits.getFirstAndLastDigit(s);
     }
 };
 
 test "getFirstAndLastDigit test" {
-    var v = DigitPair{ .first_digit = null, .second_digit = null };
+    var v = DigitPair{ .first_digit = 0, .second_digit = 0 };
     _ = try v.getFirstAndLastDigit("a1bb3cc");
     try std.testing.expect(v.first_digit == 1 and v.second_digit == 3);
 
