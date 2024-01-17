@@ -13,7 +13,11 @@ pub fn main() !void {
 
     var sum: u64 = 0;
     for (lines, 1..) |line, idx| {
-        const digits = try DigitPair.instance(line);
+        // const digits: *const DigitPair = DigitPair.instance(line) catch &DigitPair.getAdditiveIdentity();
+        const digits: *const DigitPair = DigitPair.instance(line) catch |err| switch (err) {
+            error.DigitNotFoundError => &DigitPair.getAdditiveIdentity(),
+            else => return err
+        };
         sum += digits.getNumber();
         std.debug.print("line {d}: {d} ({d}) ({d}): {s}\n", .{ idx, line.len, digits.getNumber(), sum, line });
     }
@@ -34,7 +38,7 @@ fn readFile(allocator: std.mem.Allocator, filePath: [:0]const u8) ![]const []con
     return lines.items;
 }
 
-const NoDigitError = error{DigitNotFoundError};
+const DigitPairErrors = error{DigitNotFoundError, OtherError};
 
 const DigitPair = struct {
     first_digit: u8,
@@ -44,16 +48,16 @@ const DigitPair = struct {
     const number_tokens = [_][]const u8{ "1", "2", "3", "4", "5", "6", "7", "8", "9" };
     const all_tokens = text_number_tokens ++ number_tokens;
 
-    pub fn getNumber(self: *@This()) u8 {
+    pub fn getNumber(self: *const @This()) u8 {
         return (self.first_digit * 10) + self.second_digit;
     }
 
-    pub fn getFirstAndLastDigit(self: *DigitPair, s: []const u8) !*DigitPair {
+    pub fn getFirstAndLastDigit(self: *@This(), s: []const u8) !*DigitPair {
         const allocator = std.heap.page_allocator;
         const numbers = try parseLine(allocator, s);
         if (numbers.len == 0) {
             try std.io.getStdErr().writer().print("No Digit in: {s}\n", .{s});
-            return NoDigitError.DigitNotFoundError;
+            return DigitPairErrors.DigitNotFoundError;
         }
 
         self.first_digit = numbers[0];
@@ -99,6 +103,10 @@ const DigitPair = struct {
         const step1 = try tokenize(allocator, s);
         defer allocator.free(step1);
         return token2int(allocator, step1);
+    }
+
+    fn getAdditiveIdentity() DigitPair {
+        return DigitPair{ .first_digit = 0, .second_digit = 0 };
     }
 };
 
@@ -179,5 +187,5 @@ test "getFirstAndLastDigit test" {
     try std.testing.expect(v1.first_digit == 2 and v1.second_digit == 9);
 
     const v2 = v1.getFirstAndLastDigit("asdasasd");
-    try std.testing.expectError(NoDigitError.DigitNotFoundError, v2);
+    try std.testing.expectError(DigitPairErrors.DigitNotFoundError, v2);
 }
